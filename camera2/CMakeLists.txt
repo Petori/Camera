@@ -11,7 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   ##  kinect2_bridge
     roscpp geometry_msgs std_msgs std_srvs message_generation sensor_msgs cv_bridge
     image_transport
-    kinova_arm_moveit_demo
+    common_msgs
 )
 find_package(OpenCV REQUIRED)
 find_package(PCL 1.7)
