@@ -37,8 +37,8 @@
 
 #include<pcl/search/search.h>
 #include<std_msgs/Int8.h>
-#include<kinova_arm_moveit_demo/targetState.h>
-#include<kinova_arm_moveit_demo/targetsVector.h>
+#include<common_msgs/targetState.h>
+#include<common_msgs/targetsVector.h>
 using namespace cv::xfeatures2d;
 using namespace cv;
 using namespace std;
@@ -56,7 +56,7 @@ typedef pcl::PointCloud<PointT> PointCloud;
 
 bool show_image=false;
 bool recognition_on=true;
-kinova_arm_moveit_demo::targetsVector coordinate_vec;
+common_msgs::targetsVector coordinate_vec;
 //define global center point of object
 int32_t* px_py = new int32_t[2];
 PointCloud::Ptr obj_cloud(new PointCloud);
@@ -263,7 +263,7 @@ void calculate_clouds_coordinate()
 {
 
     coordinate_vec.targets.clear();
-    kinova_arm_moveit_demo::targetState coordinate;
+    common_msgs::targetState coordinate;
     coordinate.tag=1;
     coordinate.px = px_py[0];
     coordinate.py = px_py[1];
@@ -416,7 +416,7 @@ int main(int argc, char **argv)
   sync.registerCallback(boost::bind(&image_Callback, _1, _2));
 
   ros::Subscriber detect_sub = nh.subscribe(detect_target_str, 1000, RobotSignalCallback);
-  detect_result_pub = nh.advertise<kinova_arm_moveit_demo::targetsVector>(detect_result_str.c_str(), 1000);
+  detect_result_pub = nh.advertise<common_msgs::targetsVector>(detect_result_str.c_str(), 1000);
 
   ros::spin();
 
