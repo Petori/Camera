@@ -13,8 +13,8 @@ using namespace cv::xfeatures2d;
 //int main(int argc,char* argv[])
 int main()
 {
-  Mat srcImage1 = imread("/home/zhsyi/camera/src/camera2/src/1.jpg");
-  Mat srcImage2 = imread("/home/zhsyi/camera/src/camera2/src/inrange2.jpg");
+  Mat srcImage1 = imread("/home/zhsyi/kinova/src/Camera/camera2/src/image/medicine1.png");
+  Mat srcImage2 = imread("/home/zhsyi/kinova/src/Camera/camera2/src/image/rectobj.png");
     if (srcImage1.empty()||srcImage2.empty())
     {
         cout << "不能正常加载图片" << endl;
@@ -74,24 +74,24 @@ int main()
   Mat H = findHomography(obj, scene, CV_RANSAC);
     //从待测图片中获取角点
   vector<Point2f>obj_corners(4);
-  /*
+
   obj_corners[0] = cvPoint(0, 0);
   obj_corners[1] = cvPoint(srcImage1.cols, 0);
   obj_corners[2] = cvPoint(srcImage1.cols, srcImage1.rows);
   obj_corners[3] = cvPoint(0, srcImage1.rows);
-
+/*
   obj_corners[0] = cvPoint(67,62);
   obj_corners[1] = cvPoint(829, 29);
   obj_corners[2] = cvPoint(889, 1194);
-  obj_corners[3] = cvPoint(0, 1207);   */
+  obj_corners[3] = cvPoint(0, 1207);
 
-  obj_corners[0] = cvPoint(213,14);
-  obj_corners[1] = cvPoint(779, 105);
-  obj_corners[2] = cvPoint(868, 516);
-  obj_corners[3] = cvPoint(95, 507);
+  obj_corners[0] = cvPoint(170,134);
+  obj_corners[1] = cvPoint(498, 169);
+  obj_corners[2] = cvPoint(493, 359);
+  obj_corners[3] = cvPoint(119, 336);  */
   vector<Point2f>scene_corners(4);
     //进行透视变换
-  cout<<obj_corners[2]<<endl;
+  cout<<obj_corners[0]<<endl;
   perspectiveTransform(obj_corners, scene_corners, H);
 
   cout<<scene_corners[0]<<endl;

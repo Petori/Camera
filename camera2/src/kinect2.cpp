@@ -60,16 +60,24 @@ common_msgs::targetsVector coordinate_vec;
 //define global center point of object
 int32_t* px_py = new int32_t[2];
 PointCloud::Ptr obj_cloud(new PointCloud);
-
-//camera parameter
+//1.0688009754013181e+03, 0., 9.6848745409735511e+02, 0.,
+       //1.0679639125492047e+03, 5.3777681353661535e+02, 0., 0., 1.
+//camera  305 kinect2
+/*
 double camera_factor = 1000;
-double camera_cx = 482.45;
-double camera_cy = 275.98;
-double camera_fx = 533.3;
-double camera_fy = 533.26;
-
+double camera_cx = 968/2;
+double camera_cy = 537/2;
+double camera_fx = 1068.8/2;
+double camera_fy = 1068/2;
+*/
+//my kinect2
+double camera_factor = 1000;
+double camera_cx = 965/2;
+double camera_cy = 552/2;
+double camera_fx = 1066.6/2;
+double camera_fy = 1066.5/2;
 //sort point by y
-bool comp(Point2f &a,Point2f &b)
+bool compy(Point2f &a,Point2f &b)
 {
   if (a.y<b.y)
     return true;
@@ -78,10 +86,19 @@ bool comp(Point2f &a,Point2f &b)
   else
     return false;
 }
+bool compx(Point2f &a,Point2f &b)
+{
+  if (a.x<b.x)
+    return true;
+  else if (a.x==b.x && a.y<b.y)
+    return true;
+  else
+    return false;
+}
 
 void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect)
 {
-  Mat srcImage1 = imread("/home/zhsyi/camera/src/camera2/src/image/1.jpg");
+  Mat srcImage1 = imread("/home/zhsyi/kinova/src/Camera/camera2/src/image/medicine1.png");
 
   int minHessian = 400;
   Ptr<SurfFeatureDetector> detector = SurfFeatureDetector::create(minHessian);
@@ -105,8 +122,8 @@ void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect)
     if (dist < min_dist)min_dist = dist;
     if (dist > max_dist)max_dist = dist;
   }
-  cout<<"最短距离"<<min_dist<<endl;
-  cout<<"最大距离"<<max_dist<<endl;
+//  cout<<"最短距离"<<min_dist<<endl;
+//  cout<<"最大距离"<<max_dist<<endl;
     //存下匹配距离小于3×min_dist的点对
   std::vector< DMatch >good_matches;
   for (int i = 0; i < descriptors_object.rows; i++)
@@ -135,17 +152,12 @@ void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect)
   Mat H = findHomography(obj, scene, CV_RANSAC);
     //从待测图片中获取角点
   vector<Point2f>obj_corners(4);
-  /*
+
   obj_corners[0] = cvPoint(0, 0);
   obj_corners[1] = cvPoint(srcImage1.cols, 0);
   obj_corners[2] = cvPoint(srcImage1.cols, srcImage1.rows);
   obj_corners[3] = cvPoint(0, srcImage1.rows);
-  */
 
-  obj_corners[0] = cvPoint(213,14);
-  obj_corners[1] = cvPoint(779, 105);
-  obj_corners[2] = cvPoint(868, 516);
-  obj_corners[3] = cvPoint(95, 507);
   vector<Point2f>scene_corners(4);
 
     //进行透视变换
@@ -155,47 +167,26 @@ void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect)
   line(img_matches, scene_corners[1] + Point2f(static_cast<float>(srcImage1.cols), 0), scene_corners[2] + Point2f(static_cast<float>(srcImage1.cols), 0), Scalar(255, 0, 123), 4);
   line(img_matches, scene_corners[2] + Point2f(static_cast<float>(srcImage1.cols), 0), scene_corners[3] + Point2f(static_cast<float>(srcImage1.cols), 0), Scalar(255, 0, 123), 4);
   line(img_matches, scene_corners[3] + Point2f(static_cast<float>(srcImage1.cols), 0), scene_corners[0] + Point2f(static_cast<float>(srcImage1.cols), 0), Scalar(255, 0, 123), 4);
-  imwrite("/home/zhsyi/camera/src/camera2/src/obj.jpg",img_matches);
- // namedWindow("目标检测结果", WINDOW_NORMAL);
-  //imshow("目标检测结果", img_matches);
-  //waitKey(1000);
-
+  imwrite("/home/zhsyi/kinova/src/Camera/camera2/src/image/lineobj.png",img_matches);
+vector<Point2f>temp_corners_x=scene_corners;
+vector<Point2f>temp_corners_y=scene_corners;
   Point2f rect_point;
   double rect_height,rect_width;
- rect_point.y=scene_corners[1].y<scene_corners[0].y? scene_corners[1].y:scene_corners[0].y;
 
- rect_point.x=scene_corners[3].x<scene_corners[0].x? scene_corners[3].x:scene_corners[0].x;
+  sort (temp_corners_x.begin(),temp_corners_x.end(),compx);
+  sort (temp_corners_y.begin(),temp_corners_y.end(),compy);
+  rect_point.x=temp_corners_x[0].x;
+  rect_point.y=temp_corners_y[0].y;
 
-  double top_width=scene_corners[1].x-scene_corners[0].x;
-  double bottom_width=scene_corners[2].x-scene_corners[3].x;
-  rect_width=top_width>bottom_width? top_width:bottom_width;
-
-  sort (scene_corners.begin(),scene_corners.end(),comp);
-
-  rect_height=(scene_corners.end()-1)->y - (scene_corners.begin())->y;
-  //cout<<"height= "<<rect_height<<endl;
- //cout<<"first point"<<scene_corners.begin()->x<< " " <<scene_corners.begin()->y<<endl;
- //cout<<"last point"<<(scene_corners.end()-1)->x<<" "<<(scene_corners.end()-1)->y<<endl;
- //imwrite("/home/zhsyi/camera/src/camera2/src/image/inrange2.jpg",mat_image_rgb);
+  rect_height=(temp_corners_y.end()-1)->y - (temp_corners_y.begin())->y;
+  rect_width=(temp_corners_x.end()-1)->x - (temp_corners_x.begin())->x;
 
   rect=cv::Rect(rect_point.x,rect_point.y,rect_width,rect_height);
 
   rectangle(mat_image_rgb,rect,Scalar(255,0,0),1,8,0);
-  imwrite("/home/zhsyi/camera/src/camera2/src/image/addrect.jpg",mat_image_rgb);
+  imwrite("/home/zhsyi/kinova/src/Camera/camera2/src/image/rectobj.png",mat_image_rgb);
   //imshow("rectangle",mat_image_rgb);
   //waitKey(0);
-/*
-
-  Mat roi=Mat::zeros(mat_image_rgb.size(),CV_8U);
-  vector<vector <Point2f> >contour;
-  contour.push_back(scene_corners);
-  drawContours(roi,contour,0,Scalar::all(255),-1);
-  mat_image_rgb.copyTo(dst,roi);
-  //imshow("roi",roi);
-  imshow("img",mat_image_rgb);
-  waitKey(1000);
-  imshow("dst",dst);
-  waitKey(1000);         */
 
 }
 
@@ -211,8 +202,8 @@ void GetCloud(cv::Rect &rect, cv::Mat image_rgb, cv::Mat image_depth)
   //cv::equalizeHist(HSV_split[2],HSV_split[2]);
  // cv::merge(HSV_split,image_HSV);
   cv::Mat img_thresholded;
-  int minh = 22, maxh = 95, mins = 0, maxs = 255, minv = 31, maxv = 229;
-  //int minh = 0, maxh = 180, mins = 0, maxs = 255, minv = 0, maxv = 46;
+  //int minh = 22, maxh = 95, mins = 0, maxs = 255, minv = 31, maxv = 229;
+  int minh = 0, maxh = 180, mins = 0, maxs = 255, minv = 0, maxv = 46;
 //  int minh = 0, maxh = 10, mins = 43, maxs = 255, minv = 46, maxv = 255;
   cv::inRange(image_HSV, cv::Scalar(minh, mins, minv), cv::Scalar(maxh, maxs, maxv), img_thresholded);
 
@@ -221,7 +212,6 @@ void GetCloud(cv::Rect &rect, cv::Mat image_rgb, cv::Mat image_depth)
   cv::morphologyEx(img_thresholded, img_thresholded, cv::MORPH_OPEN, element);
   //闭操作 (连接一些连通域)
   cv::morphologyEx(img_thresholded, img_thresholded, cv::MORPH_CLOSE, element);
-
 
     obj_cloud->is_dense = false;
     for(int i = rect.x;i<rect.x+rect.width;i++)
@@ -257,6 +247,7 @@ void GetCloud(cv::Rect &rect, cv::Mat image_rgb, cv::Mat image_depth)
     //px_py.push_back(px_py);
     cout<<"number of clouds is :"<<obj_cloud->points.size();
     cout<<"center is: "<<px_py[0]<<" , "<<px_py[1]<<endl;
+    //pcl::io::savePCDFileBinary("obj.pcd", *obj_cloud );
 }
 
 void calculate_clouds_coordinate()
@@ -332,6 +323,10 @@ void calculate_clouds_coordinate()
     coordinate.qy = quaternion.y();
     coordinate.qz = quaternion.z();
     coordinate.qw = quaternion.w();
+    cout<<"center"<<endl;
+    cout<< coordinate.x<<endl;
+    cout<< coordinate.y<<endl;
+    cout<< coordinate.z<<endl;
     //put the calculated coordinate into the vector
     coordinate_vec.targets.push_back(coordinate);
 
@@ -365,7 +360,7 @@ void image_Callback( const sensor_msgs::ImageConstPtr &image_rgb,
     //发送点云对应坐标
     detect_result_pub.publish(coordinate_vec);
     cout<<"information publish success!"<<endl;
-
+cout<<endl;
     if (show_image)
     {
       try
