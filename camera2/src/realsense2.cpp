@@ -13,6 +13,21 @@
 #include <opencv2/xfeatures2d/nonfree.hpp>
 #include <opencv2/core/core.hpp>
 
+#include "ros/ros.h"
+#include "std_msgs/String.h"
+#include <image_transport/image_transport.h>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/opencv.hpp>
+#include <geometry_msgs/TransformStamped.h>
+#include <cv_bridge/cv_bridge.h>
+#include <iostream>
+#include <cmath>
+#include <vector>
+#include <fstream>
+#include <opencv2/features2d.hpp>
+#include <opencv2/xfeatures2d/nonfree.hpp>
+#include <opencv2/core/core.hpp>
+
 #include <ros/spinner.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
@@ -47,9 +62,26 @@ std::string detect_target_str = "detect_target";
 std::string detect_result_str = "detect_result";
 ros::Publisher detect_result_pub;
 ros::Time timer;
+
 std::string image_rgb_str =  "camera/color/image_raw";
 std::string image_depth_str = "camera/depth/image_rect_raw";
 
+cv::Mat mat_image_rgb;
+cv::Mat mat_image_depth;
+/*
+void imageCallback( const sensor_msgs::ImageConstPtr &image_rgb,
+                     const sensor_msgs::ImageConstPtr  &image_depth )
+
+{
+    cv::Mat mat_image_rgb = cv_bridge::toCvShare(image_rgb)->image;
+    cv::Mat mat_image_depth = cv_bridge::toCvShare(image_depth)->image;
+    //cout<<4<<endl;
+    imshow("show picture1",mat_image_rgb);
+    waitKey(0.5);
+    //imshow("show picture2",mat_image_depth);
+    //waitKey(3);
+}
+*/
 
 typedef pcl::PointXYZRGBA PointT;
 typedef pcl::PointCloud<PointT> PointCloud;
@@ -60,21 +92,29 @@ common_msgs::targetsVector coordinate_vec;
 //define global center point of object
 int32_t* px_py = new int32_t[2];
 PointCloud::Ptr obj_cloud(new PointCloud);
-//1.0688009754013181e+03, 0., 9.6848745409735511e+02, 0.,
-       //1.0679639125492047e+03, 5.3777681353661535e+02, 0., 0., 1.
+
 //camera parameter
 double camera_factor = 1000;
-double camera_cx = 968/2;
-double camera_cy = 537/2;
-double camera_fx = 1068.8/2;
-double camera_fy = 1068/2;
+double camera_cx = 633.37;
+double camera_cy = 361.89;
+double camera_fx = 908.32;
+double camera_fy = 908.01;
 
 //sort point by y
-bool comp(Point2f &a,Point2f &b)
+bool compy(Point2f &a,Point2f &b)
 {
   if (a.y<b.y)
     return true;
   else if (a.y==b.y && a.x<b.x)
+    return true;
+  else
+    return false;
+}
+bool compx(Point2f &a,Point2f &b)
+{
+  if (a.x<b.x)
+    return true;
+  else if (a.x==b.x && a.y<b.y)
     return true;
   else
     return false;
@@ -106,8 +146,8 @@ void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect)
     if (dist < min_dist)min_dist = dist;
     if (dist > max_dist)max_dist = dist;
   }
-  cout<<"最短距离"<<min_dist<<endl;
-  cout<<"最大距离"<<max_dist<<endl;
+ // cout<<"最短距离"<<min_dist<<endl;
+ // cout<<"最大距离"<<max_dist<<endl;
     //存下匹配距离小于3×min_dist的点对
   std::vector< DMatch >good_matches;
   for (int i = 0; i < descriptors_object.rows; i++)
@@ -142,11 +182,6 @@ void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect)
   obj_corners[2] = cvPoint(srcImage1.cols, srcImage1.rows);
   obj_corners[3] = cvPoint(0, srcImage1.rows);
 
-/*
-  obj_corners[0] = cvPoint(213,14);
-  obj_corners[1] = cvPoint(779, 105);
-  obj_corners[2] = cvPoint(868, 516);
-  obj_corners[3] = cvPoint(95, 507);*/
   vector<Point2f>scene_corners(4);
 
     //进行透视变换
@@ -157,48 +192,26 @@ void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect)
   line(img_matches, scene_corners[2] + Point2f(static_cast<float>(srcImage1.cols), 0), scene_corners[3] + Point2f(static_cast<float>(srcImage1.cols), 0), Scalar(255, 0, 123), 4);
   line(img_matches, scene_corners[3] + Point2f(static_cast<float>(srcImage1.cols), 0), scene_corners[0] + Point2f(static_cast<float>(srcImage1.cols), 0), Scalar(255, 0, 123), 4);
   imwrite("/home/zhsyi/kinova/src/Camera/camera2/src/image/lineobj.png",img_matches);
- // namedWindow("目标检测结果", WINDOW_NORMAL);
-  //imshow("目标检测结果", img_matches);
-  //waitKey(1000);
 
-  Point2f rect_point;
-  double rect_height,rect_width;
- rect_point.y=scene_corners[1].y<scene_corners[0].y? scene_corners[1].y:scene_corners[0].y;
- rect_point.x=scene_corners[3].x<scene_corners[0].x? scene_corners[3].x:scene_corners[0].x;
+  vector<Point2f>temp_corners_x=scene_corners;
+  vector<Point2f>temp_corners_y=scene_corners;
+    Point2f rect_point;
+    double rect_height,rect_width;
 
- double min03x=rect_point.x;
- double max12x=max(scene_corners[1].x,scene_corners[2].x);
+    sort (temp_corners_x.begin(),temp_corners_x.end(),compx);
+    sort (temp_corners_y.begin(),temp_corners_y.end(),compy);
+    rect_point.x=temp_corners_x[0].x;
+    rect_point.y=temp_corners_y[0].y;
 
-  //double top_width=scene_corners[1].x-scene_corners[0].x;
-  //double bottom_width=scene_corners[2].x-scene_corners[3].x;
-  //rect_width=top_width>bottom_width? top_width:bottom_width;
-  rect_width=max12x-min03x;
-  sort (scene_corners.begin(),scene_corners.end(),comp);
-  rect_height=(scene_corners.end()-1)->y - (scene_corners.begin())->y;
-
-  //cout<<"height= "<<rect_height<<endl;
- //cout<<"first point"<<scene_corners.begin()->x<< " " <<scene_corners.begin()->y<<endl;
- //cout<<"last point"<<(scene_corners.end()-1)->x<<" "<<(scene_corners.end()-1)->y<<endl;
- //imwrite("/home/zhsyi/camera/src/camera2/src/image/inrange2.jpg",mat_image_rgb);
+    rect_height=(temp_corners_y.end()-1)->y - (temp_corners_y.begin())->y;
+    rect_width=(temp_corners_x.end()-1)->x - (temp_corners_x.begin())->x;
 
   rect=cv::Rect(rect_point.x,rect_point.y,rect_width,rect_height);
-
+cout<<"rect: "<<rect.x<<rect.y<<endl;
   rectangle(mat_image_rgb,rect,Scalar(255,0,0),1,8,0);
   imwrite("/home/zhsyi/kinova/src/Camera/camera2/src/image/rectobj.png",mat_image_rgb);
   //imshow("rectangle",mat_image_rgb);
   //waitKey(0);
-/*
-
-  Mat roi=Mat::zeros(mat_image_rgb.size(),CV_8U);
-  vector<vector <Point2f> >contour;
-  contour.push_back(scene_corners);
-  drawContours(roi,contour,0,Scalar::all(255),-1);
-  mat_image_rgb.copyTo(dst,roi);
-  //imshow("roi",roi);
-  imshow("img",mat_image_rgb);
-  waitKey(1000);
-  imshow("dst",dst);
-  waitKey(1000);         */
 
 }
 
@@ -225,7 +238,6 @@ void GetCloud(cv::Rect &rect, cv::Mat image_rgb, cv::Mat image_depth)
   //闭操作 (连接一些连通域)
   cv::morphologyEx(img_thresholded, img_thresholded, cv::MORPH_CLOSE, element);
 
-
     obj_cloud->is_dense = false;
     for(int i = rect.x;i<rect.x+rect.width;i++)
     {
@@ -235,13 +247,15 @@ void GetCloud(cv::Rect &rect, cv::Mat image_rgb, cv::Mat image_depth)
         if(img_thresholded.ptr<uchar>(j)[i]>0)
           continue;
         // 获取深度图中(i,j)处的值
-        ushort d = image_depth.ptr<ushort>(j)[i];
-
+        double d = (double)image_depth.at<ushort>(j,i);
+        if (d>2000)
+                continue;
         // 计算这个点的空间坐标
         PointT p;
-        p.z = double(d) / camera_factor;
+        p.z = d / camera_factor;
         p.x = (i- camera_cx) * p.z / camera_fx;
         p.y = (j - camera_cy) * p.z / camera_fy;
+cout<<"j="<<j<<"i="<<i<<", z value:"<<p.z<<",    x value:"<<p.x<<endl;
 
         // 从rgb图像中获取它的颜色
         // rgb是三通道的BGR格式图，所以按下面的顺序获取颜色
@@ -252,6 +266,7 @@ void GetCloud(cv::Rect &rect, cv::Mat image_rgb, cv::Mat image_depth)
         obj_cloud->points.push_back( p );
       }
     }
+
     obj_cloud->height = 1;
     obj_cloud->width = obj_cloud->points.size();
     //clouds.push_back(obj_cloud);
@@ -344,59 +359,55 @@ void calculate_clouds_coordinate()
 
 }
 
-
-void image_Callback( const sensor_msgs::ImageConstPtr &image_rgb,
-                     const sensor_msgs::ImageConstPtr  &image_depth )
-
+void imageCallback_depth( const sensor_msgs::ImageConstPtr  &image_depth )
 {
-  if(recognition_on==true)
-  {
-    ROS_INFO_STREAM("Recognition is on!!!");
+    mat_image_depth = cv_bridge::toCvShare(image_depth)->image;
 
-  //转换ROS图像消息到opencv图像
-    cv::Mat mat_image_rgb = cv_bridge::toCvShare(image_rgb)->image;
-    cv::Mat mat_image_depth = cv_bridge::toCvShare(image_depth)->image;
-//  imshow("depth",mat_image_depth);
-//  waitKey(1000);
-
-    cv::Rect rect;
-    surf_detect(mat_image_rgb,rect);
-    cout<<"surf detection has done!"<<endl;
-
-    GetCloud(rect,mat_image_rgb,mat_image_depth);
-    cout<<"3D cloud information has got!"<<endl;
-
-    calculate_clouds_coordinate();
-    cout<<"PCA method has done!"<<endl;
-
-    //发送点云对应坐标
-    detect_result_pub.publish(coordinate_vec);
-    cout<<"information publish success!"<<endl;
-
-    if (show_image)
-    {
-      try
-      {
-        //cv::imshow(window_rgb_top, cv_bridge::toCvShare(image_rgb)->image);
-        cv::imshow("rgb_image", mat_image_rgb);
-      }
-      catch (cv_bridge::Exception& e)
-      {
-        ROS_ERROR("Could not convert colored images from '%s' to 'bgr8'.", image_rgb->encoding.c_str());
-      }
-      try
-      {
-        cv::imshow("depth_image", mat_image_depth);
-      }
-      catch(cv_bridge::Exception& e)
-      {
-        ROS_ERROR("Could not convert depth images from '%s' to 'bgr8'.", image_depth->encoding.c_str());
-      }
-    }
-
-  }
-
+    //imshow("show picture2",mat_image_depth);
+    //waitKey(1.5);
 }
+
+void imageCallback_color( const sensor_msgs::ImageConstPtr &image_rgb)
+{
+      if(recognition_on==true)
+      {
+        ROS_INFO_STREAM("Recognition is on!!!");
+
+      //转换ROS图像消息到opencv图像
+        mat_image_rgb = cv_bridge::toCvShare(image_rgb,"bgr8")->image;
+
+        cv::Rect rect;
+        surf_detect(mat_image_rgb,rect);
+        cout<<"surf detection has done!"<<endl;
+
+        GetCloud(rect,mat_image_rgb,mat_image_depth);
+        cout<<"3D cloud information has got!"<<endl;
+
+        calculate_clouds_coordinate();
+        cout<<"PCA method has done!"<<endl;
+
+        //发送点云对应坐标
+        detect_result_pub.publish(coordinate_vec);
+        cout<<"information publish success!"<<endl;
+
+        if (show_image)
+        {
+          try
+          {
+            //cv::imshow(window_rgb_top, cv_bridge::toCvShare(image_rgb)->image);
+            cv::imshow("rgb_image", mat_image_rgb);
+          }
+          catch (cv_bridge::Exception& e)
+          {
+            ROS_ERROR("Could not convert colored images from '%s' to 'bgr8'.", image_rgb->encoding.c_str());
+          }
+        }
+
+      }
+    //imshow("show picture1",mat_image_rgb);
+    //waitKey(1.5);
+}
+
 
 void RobotSignalCallback(const std_msgs::Int8::ConstPtr& msg)
 {
@@ -408,19 +419,20 @@ void RobotSignalCallback(const std_msgs::Int8::ConstPtr& msg)
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "realsense2_image");
+  ros::init(argc, argv, "realsense2");
   ros::NodeHandle nh;
-
+  //cv::namedWindow("Show Image");
+  //cv::startWindowThread();
   image_transport::ImageTransport it(nh);
-
+/*
   message_filters::Subscriber<sensor_msgs::Image> image_rgb_sub(nh, image_rgb_str, 1);
   message_filters::Subscriber<sensor_msgs::Image>image_depth_sub(nh, image_depth_str, 1);
- // message_filters::Subscriber<sensor_msgs::CameraInfo>cam_info_sub(nh,  cam_info_str, 1);
 
-
-  //同步深度图和彩色图
   message_filters::TimeSynchronizer<sensor_msgs::Image, sensor_msgs::Image> sync(image_rgb_sub, image_depth_sub, 10);
-  sync.registerCallback(boost::bind(&image_Callback, _1, _2));
+  sync.registerCallback(boost::bind(&imageCallback, _1, _2));
+  */
+  image_transport::Subscriber sub2 = it.subscribe(image_depth_str, 1, imageCallback_depth);
+  image_transport::Subscriber sub1 = it.subscribe(image_rgb_str, 1, imageCallback_color);
 
   ros::Subscriber detect_sub = nh.subscribe(detect_target_str, 1000, RobotSignalCallback);
   detect_result_pub = nh.advertise<common_msgs::targetsVector>(detect_result_str.c_str(), 1000);

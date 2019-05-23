@@ -178,6 +178,12 @@ target_link_libraries(kinect2
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )
+add_executable(kinect2_multiobj src/kinect2_multiobj.cpp)
+target_link_libraries(kinect2_multiobj
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+)
+
 add_executable(realsense2 src/realsense2.cpp)
 target_link_libraries(realsense2
   ${catkin_LIBRARIES}

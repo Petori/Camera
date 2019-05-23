@@ -13,7 +13,7 @@ using namespace cv::xfeatures2d;
 //int main(int argc,char* argv[])
 int main()
 {
-  Mat srcImage1 = imread("/home/zhsyi/kinova/src/Camera/camera2/src/image/medicine1.png");
+  Mat srcImage1 = imread("/home/zhsyi/kinova/src/Camera/camera2/src/image/1.png");
   Mat srcImage2 = imread("/home/zhsyi/kinova/src/Camera/camera2/src/image/rectobj.png");
     if (srcImage1.empty()||srcImage2.empty())
     {
