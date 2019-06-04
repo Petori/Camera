@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
     roscpp geometry_msgs std_msgs std_srvs message_generation sensor_msgs cv_bridge
     image_transport
     common_msgs
+    NO_DEFAULT_PATH
 )
 find_package(OpenCV REQUIRED)
 find_package(PCL 1.7)
@@ -177,9 +178,26 @@ target_link_libraries(kinect2
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )
+add_executable(kinect2_multiobj src/kinect2_multiobj.cpp)
+target_link_libraries(kinect2_multiobj
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+)
+
+add_executable(realsense2 src/realsense2.cpp)
+target_link_libraries(realsense2
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+)
 
 add_executable(test1 src/test.cpp)
 target_link_libraries(test1
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+)
+
+add_executable(testdepth src/testdepth.cpp)
+target_link_libraries(testdepth
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )

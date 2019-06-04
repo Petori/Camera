@@ -122,7 +122,7 @@ int main(int argc, char* argv[])
     while (true) {
         //! [while]
         //cap >> frame;
-      frame=imread("/home/zhsyi/camera/src/camera2/src/inrange2.jpg");
+      frame=imread("/home/zhsyi/kinova/src/Camera/camera2/src/image/things.png");
         if(frame.empty())
         {
             break;
