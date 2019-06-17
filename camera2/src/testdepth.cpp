@@ -48,18 +48,21 @@ if(get_desired)
     cout<<"desired depth_image has been saved"<<endl;
   }
   file.close();
-
+double d;
   for(int i = 0;i<depthimage.rows;i++)
   {
     for(int j = 0;j<depthimage.cols;j++)
     {
-       testimage.at<double>(i,j) = depthimage.at<ushort>(i,j);
+       //testimage.at<double>(i,j) = depthimage.at<ushort>(i,j);
+      d = (double)depthimage.at<ushort>(i,j);
+cout<<d<<" ";
        //testimage.at<double>(i,j)=testimage.at<double>(i,j)/1000;
     }
   }
+  /*
   ofstream test_desired;
   test_desired.open("/home/zhsyi/kinova/src/Camera/camera2/src/image/testdepth.txt");
-  test_desired<<testimage;
+  test_desired<<d;
   test_desired.close();
 
   for(int i = 0;i<diffimage.rows;i++)
@@ -74,6 +77,7 @@ if(get_desired)
   diff_desired.open("/home/zhsyi/kinova/src/Camera/camera2/src/image/diffdepth.txt");
   diff_desired<<diffimage;
   diff_desired.close();
+  */
 
 }
 }

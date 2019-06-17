@@ -238,18 +238,23 @@ void GetCloud(cv::Rect &rect, cv::Mat image_rgb, cv::Mat image_depth)
   //闭操作 (连接一些连通域)
   cv::morphologyEx(img_thresholded, img_thresholded, cv::MORPH_CLOSE, element);
 
-    obj_cloud->is_dense = false;
+    obj_cloud->is_dense = false;/*
     for(int i = rect.x;i<rect.x+rect.width;i++)
     {
       for(int j = rect.y;j<rect.y+rect.height;j++)
       {
+          */
+          for(int i = 0;i<image_depth.cols;i++)
+          {
+            for(int j = 0;j<image_depth.rows;j++)
+            {
         //remove black area of the image
-        if(img_thresholded.ptr<uchar>(j)[i]>0)
-          continue;
-         //获取深度图中(i,j)处的值
+        //if(img_thresholded.ptr<uchar>(j)[i]>0)
+        //  continue;
+        // 获取深度图中(i,j)处的值
         double d = (double)image_depth.at<ushort>(j,i);
 
-
+        d = (double)depthimage.at<ushort>(i,j);
         //if (d>2000)
         //        continue;
         // 计算这个点的空间坐标
@@ -363,7 +368,7 @@ void calculate_clouds_coordinate()
 
 void imageCallback_depth( const sensor_msgs::ImageConstPtr  &image_depth )
 {
-    mat_image_depth = cv_bridge::toCvCopy(image_depth)->image;
+    mat_image_depth = cv_bridge::toCvShare(image_depth)->image;
 
     //imshow("show picture2",mat_image_depth);
     //waitKey(1.5);
@@ -384,14 +389,14 @@ void imageCallback_color( const sensor_msgs::ImageConstPtr &image_rgb)
 
         GetCloud(rect,mat_image_rgb,mat_image_depth);
         cout<<"3D cloud information has got!"<<endl;
-
+/*
         calculate_clouds_coordinate();
         cout<<"PCA method has done!"<<endl;
 
         //发送点云对应坐标
         detect_result_pub.publish(coordinate_vec);
         cout<<"information publish success!"<<endl;
-
+*/
         if (show_image)
         {
           try

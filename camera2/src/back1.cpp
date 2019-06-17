@@ -73,11 +73,11 @@ cv::Mat mat_image_depth;
 typedef pcl::PointXYZRGBA PointT;
 typedef pcl::PointCloud<PointT> PointCloud;
 
-//bool show_image=false;
-//bool recognition_on=true;
-//common_msgs::targetsVector coordinate_vec;
+bool show_image=false;
+bool recognition_on=true;
+common_msgs::targetsVector coordinate_vec;
 //define global center point of object
-//int32_t* px_py = new int32_t[2];
+int32_t* px_py = new int32_t[2];
 PointCloud::Ptr obj_cloud(new PointCloud);
 
 //camera parameter
@@ -89,43 +89,85 @@ double camera_fy = 908.01;
 
 void GetCloud(cv::Mat image_depth)
 {
-   obj_cloud->is_dense = false;
-   for(int i = 0;i<image_depth.cols;i++)
-   {
-        for(int j = 0;j<image_depth.rows;j++)
-        {
-            double d = (double)image_depth.at<ushort>(j,i);
-            PointT p;
-            p.z = d / camera_factor;
-            p.x = (i- camera_cx) * p.z / camera_fx;
-            p.y = (j - camera_cy) * p.z / camera_fy;
-            cout<<"j="<<j<<"i="<<i<<", z value:"<<p.z<<",    x value:"<<p.x<<endl;
-            obj_cloud->points.push_back( p );
-        }
+
+    obj_cloud->is_dense = false;/*
+    for(int i = rect.x;i<rect.x+rect.width;i++)
+    {
+      for(int j = rect.y;j<rect.y+rect.height;j++)
+      {
+          */
+          for(int i = 0;i<image_depth.cols;i++)
+          {
+            for(int j = 0;j<image_depth.rows;j++)
+            {
+        //remove black area of the image
+        //if(img_thresholded.ptr<uchar>(j)[i]>0)
+        //  continue;
+        // 获取深度图中(i,j)处的值
+        double d = (double)image_depth.at<ushort>(j,i);
+
+        //        continue;
+        // 计算这个点的空间坐标
+        PointT p;
+        p.z = d / camera_factor;
+        p.x = (i- camera_cx) * p.z / camera_fx;
+        p.y = (j - camera_cy) * p.z / camera_fy;
+cout<<"j="<<j<<"i="<<i<<", z value:"<<p.z<<",    x value:"<<p.x<<endl;
+
+        // 从rgb图像中获取它的颜色
+        // rgb是三通道的BGR格式图，所以按下面的顺序获取颜色
+
+
+        obj_cloud->points.push_back( p );
+      }
     }
+
     obj_cloud->height = 1;
     obj_cloud->width = obj_cloud->points.size();
+    //clouds.push_back(obj_cloud);
 
+   // px_py[0] = int32_t(rect.x+rect.width/2);px_py[1] = int32_t(rect.y+rect.height/2);
+    //px_py.push_back(px_py);
     cout<<"number of clouds is :"<<obj_cloud->points.size();
-
+   // cout<<"center is: "<<px_py[0]<<" , "<<px_py[1]<<endl;
 }
 
 
 void imageCallback_depth( const sensor_msgs::ImageConstPtr  &image_depth )
 {
-    mat_image_depth = cv_bridge::toCvCopy(image_depth)->image;
-   // GetCloud(mat_image_depth);
-   // cout<<"3D cloud information has got!"<<endl;
+    mat_image_depth = cv_bridge::toCvShare(image_depth)->image;
+    GetCloud(mat_image_depth);
+    cout<<"3D cloud information has got!"<<endl;
+
 }
 
 void imageCallback_color( const sensor_msgs::ImageConstPtr &image_rgb)
 {
+      if(recognition_on==true)
+      {
+        ROS_INFO_STREAM("Recognition is on!!!");
+
       //转换ROS图像消息到opencv图像
         mat_image_rgb = cv_bridge::toCvShare(image_rgb,"bgr8")->image;
+
+
         GetCloud(mat_image_depth);
         cout<<"3D cloud information has got!"<<endl;
+
+
+
+      }
+
 }
 
+
+void RobotSignalCallback(const std_msgs::Int8::ConstPtr& msg)
+{
+  if(msg->data == 1)
+    recognition_on = true;
+  else
+    recognition_on = false;
+}
 
 int main(int argc, char **argv)
 {
@@ -142,17 +184,10 @@ int main(int argc, char **argv)
   sync.registerCallback(boost::bind(&imageCallback, _1, _2));
   */
   image_transport::Subscriber sub2 = it.subscribe(image_depth_str, 1, imageCallback_depth);
+//  image_transport::Subscriber sub1 = it.subscribe(image_rgb_str, 1, imageCallback_color);
 
-  image_transport::Subscriber sub1 = it.subscribe(image_rgb_str, 1, imageCallback_color);
-/* sleep(1);
-    while(ros::ok())
-    {
-        GetCloud(mat_image_depth);
-        sleep(1);
-    }  */
-
-//  ros::Subscriber detect_sub = nh.subscribe(detect_target_str, 1000, RobotSignalCallback);
-//  detect_result_pub = nh.advertise<common_msgs::targetsVector>(detect_result_str.c_str(), 1000);
+  ros::Subscriber detect_sub = nh.subscribe(detect_target_str, 1000, RobotSignalCallback);
+  detect_result_pub = nh.advertise<common_msgs::targetsVector>(detect_result_str.c_str(), 1000);
 
   ros::spin();
 

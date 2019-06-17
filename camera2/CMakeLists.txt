@@ -190,6 +190,12 @@ target_link_libraries(realsense2
   ${OpenCV_LIBRARIES}
 )
 
+add_executable(realsense2_multi src/realsense2_multi.cpp)
+target_link_libraries(realsense2_multi
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+)
+
 add_executable(test1 src/test.cpp)
 target_link_libraries(test1
   ${catkin_LIBRARIES}
