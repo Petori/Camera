@@ -68,20 +68,6 @@ std::string image_depth_str = "camera/depth/image_rect_raw";
 
 cv::Mat mat_image_rgb;
 cv::Mat mat_image_depth;
-/*
-void imageCallback( const sensor_msgs::ImageConstPtr &image_rgb,
-                     const sensor_msgs::ImageConstPtr  &image_depth )
-
-{
-    cv::Mat mat_image_rgb = cv_bridge::toCvShare(image_rgb)->image;
-    cv::Mat mat_image_depth = cv_bridge::toCvShare(image_depth)->image;
-    //cout<<4<<endl;
-    imshow("show picture1",mat_image_rgb);
-    waitKey(0.5);
-    //imshow("show picture2",mat_image_depth);
-    //waitKey(3);
-}
-*/
 
 typedef pcl::PointXYZRGBA PointT;
 typedef pcl::PointCloud<PointT> PointCloud;
@@ -89,9 +75,10 @@ typedef pcl::PointCloud<PointT> PointCloud;
 bool show_image=false;
 bool recognition_on=true;
 common_msgs::targetsVector coordinate_vec;
-//define global center point of object
-int32_t* px_py = new int32_t[2];
-PointCloud::Ptr obj_cloud(new PointCloud);
+int imagenum;
+vector<PointCloud::Ptr> clouds;
+std::vector<int32_t*>px_py;
+vector<cv::Rect>rects;
 
 //camera parameter
 double camera_factor = 1000;
@@ -120,19 +107,19 @@ bool compx(Point2f &a,Point2f &b)
     return false;
 }
 
-void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect)
+void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect,cv::Mat _srcImage)
 {
-  Mat srcImage1 = imread("/home/zhsyi/kinova/src/Camera/camera2/src/image/1.png");
-
+  //Mat _srcImage = imread("/home/zhsyi/kinova/src/Camera/camera2/src/image/1.png");
+  Mat copy=mat_image_rgb.clone();
   int minHessian = 400;
   Ptr<SurfFeatureDetector> detector = SurfFeatureDetector::create(minHessian);
   vector<KeyPoint>keypoints_object, keypoints_scene;
-  detector->detect(srcImage1, keypoints_object);
+  detector->detect(_srcImage, keypoints_object);
   detector->detect(mat_image_rgb, keypoints_scene);
     //计算描述符（特征向量）
     Ptr<SurfDescriptorExtractor> extractor = SurfDescriptorExtractor::create();
   Mat descriptors_object, descriptors_scene;
-  extractor->compute(srcImage1, keypoints_object, descriptors_object);
+  extractor->compute(_srcImage, keypoints_object, descriptors_object);
   extractor->compute(mat_image_rgb, keypoints_scene, descriptors_scene);
     //使用FLANN匹配算子进行匹配
   FlannBasedMatcher matcher;
@@ -159,7 +146,7 @@ void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect)
   }
     //绘制出匹配到的关键点
   Mat img_matches;
-  drawMatches(srcImage1, keypoints_object, mat_image_rgb, keypoints_scene, good_matches, img_matches, Scalar::all(-1), Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+  drawMatches(_srcImage, keypoints_object, mat_image_rgb, keypoints_scene, good_matches, img_matches, Scalar::all(-1), Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
 
 
   //定义两个局部变量
@@ -178,19 +165,19 @@ void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect)
   vector<Point2f>obj_corners(4);
 
   obj_corners[0] = cvPoint(0, 0);
-  obj_corners[1] = cvPoint(srcImage1.cols, 0);
-  obj_corners[2] = cvPoint(srcImage1.cols, srcImage1.rows);
-  obj_corners[3] = cvPoint(0, srcImage1.rows);
+  obj_corners[1] = cvPoint(_srcImage.cols, 0);
+  obj_corners[2] = cvPoint(_srcImage.cols, _srcImage.rows);
+  obj_corners[3] = cvPoint(0, _srcImage.rows);
 
   vector<Point2f>scene_corners(4);
 
     //进行透视变换
   perspectiveTransform(obj_corners, scene_corners, H);
 
-  line(img_matches, scene_corners[0] + Point2f(static_cast<float>(srcImage1.cols), 0), scene_corners[1] + Point2f(static_cast<float>(srcImage1.cols), 0), Scalar(255, 0, 123), 4);
-  line(img_matches, scene_corners[1] + Point2f(static_cast<float>(srcImage1.cols), 0), scene_corners[2] + Point2f(static_cast<float>(srcImage1.cols), 0), Scalar(255, 0, 123), 4);
-  line(img_matches, scene_corners[2] + Point2f(static_cast<float>(srcImage1.cols), 0), scene_corners[3] + Point2f(static_cast<float>(srcImage1.cols), 0), Scalar(255, 0, 123), 4);
-  line(img_matches, scene_corners[3] + Point2f(static_cast<float>(srcImage1.cols), 0), scene_corners[0] + Point2f(static_cast<float>(srcImage1.cols), 0), Scalar(255, 0, 123), 4);
+  line(img_matches, scene_corners[0] + Point2f(static_cast<float>(_srcImage.cols), 0), scene_corners[1] + Point2f(static_cast<float>(_srcImage.cols), 0), Scalar(255, 0, 123), 4);
+  line(img_matches, scene_corners[1] + Point2f(static_cast<float>(_srcImage.cols), 0), scene_corners[2] + Point2f(static_cast<float>(_srcImage.cols), 0), Scalar(255, 0, 123), 4);
+  line(img_matches, scene_corners[2] + Point2f(static_cast<float>(_srcImage.cols), 0), scene_corners[3] + Point2f(static_cast<float>(_srcImage.cols), 0), Scalar(255, 0, 123), 4);
+  line(img_matches, scene_corners[3] + Point2f(static_cast<float>(_srcImage.cols), 0), scene_corners[0] + Point2f(static_cast<float>(_srcImage.cols), 0), Scalar(255, 0, 123), 4);
   imwrite("/home/zhsyi/kinova/src/Camera/camera2/src/image/lineobj.png",img_matches);
 
   vector<Point2f>temp_corners_x=scene_corners;
@@ -207,18 +194,17 @@ void surf_detect(cv::Mat &mat_image_rgb,cv::Rect &rect)
     rect_width=(temp_corners_x.end()-1)->x - (temp_corners_x.begin())->x;
 
   rect=cv::Rect(rect_point.x,rect_point.y,rect_width,rect_height);
-cout<<"rect: "<<rect.x<<",  "<<rect.y<<endl;
-  rectangle(mat_image_rgb,rect,Scalar(255,0,0),1,8,0);
-  imwrite("/home/zhsyi/kinova/src/Camera/camera2/src/image/rectobj.png",mat_image_rgb);
-  //imshow("rectangle",mat_image_rgb);
-  //waitKey(0);
+  //cout<<"rect: "<<rect.x<<",  "<<rect.y<<endl;
+  rects.push_back(rect);
+  rectangle(copy,rect,Scalar(255,0,0),1,8,0);
+  imwrite("/home/zhsyi/kinova/src/Camera/camera2/src/image/rectobj.png",copy);
 
 }
 
-void GetCloud(cv::Rect &rect, cv::Mat image_rgb, cv::Mat image_depth)
+void GetCloud(vector<cv::Rect> &rects, cv::Mat image_rgb, cv::Mat image_depth)
 {
-  //clouds.clear();
-  //px_py.clear();
+  clouds.clear();
+  px_py.clear();
   //color recognition
   cv::Mat image_HSV;
   std::vector<cv::Mat> HSV_split;
@@ -238,127 +224,136 @@ void GetCloud(cv::Rect &rect, cv::Mat image_rgb, cv::Mat image_depth)
   //闭操作 (连接一些连通域)
   cv::morphologyEx(img_thresholded, img_thresholded, cv::MORPH_CLOSE, element);
 
-    obj_cloud->is_dense = false;
-    for(int i = rect.x;i<rect.x+rect.width;i++)
-    {
-      for(int j = rect.y;j<rect.y+rect.height;j++)
+  for(size_t rect_num = 0;rect_num<rects.size();rect_num++)
+  {
+      PointCloud::Ptr temp_cloud(new PointCloud);
+      temp_cloud->is_dense = false;
+      for(int i = rects[rect_num].x;i<rects[rect_num].x+rects[rect_num].width;i++)
       {
+        for(int j = rects[rect_num].y;j<rects[rect_num].y+rects[rect_num].height;j++)
+        {
         //remove black area of the image
         if(img_thresholded.ptr<uchar>(j)[i]>0)
           continue;
-         //获取深度图中(i,j)处的值
+        // 获取深度图中(i,j)处的值
         double d = (double)image_depth.at<ushort>(j,i);
-
-
-        //if (d>2000)
-        //        continue;
+        if (d>2000)
+                continue;
         // 计算这个点的空间坐标
         PointT p;
         p.z = d / camera_factor;
         p.x = (i- camera_cx) * p.z / camera_fx;
         p.y = (j - camera_cy) * p.z / camera_fy;
-cout<<"j="<<j<<"i="<<i<<", z value:"<<p.z<<",    x value:"<<p.x<<endl;
-
+        cout<<"j="<<j<<"i="<<i<<", z value:"<<p.z<<",    x value:"<<p.x<<endl;
         // 从rgb图像中获取它的颜色
         // rgb是三通道的BGR格式图，所以按下面的顺序获取颜色
         p.b = image_rgb.ptr<uchar>(j)[i*3];
         p.g = image_rgb.ptr<uchar>(j)[i*3+1];
         p.r = image_rgb.ptr<uchar>(j)[i*3+2];
 
-        obj_cloud->points.push_back( p );
+        temp_cloud->points.push_back( p );
       }
     }
-
-    obj_cloud->height = 1;
-    obj_cloud->width = obj_cloud->points.size();
-    //clouds.push_back(obj_cloud);
-
-    px_py[0] = int32_t(rect.x+rect.width/2);px_py[1] = int32_t(rect.y+rect.height/2);
-    //px_py.push_back(px_py);
-    cout<<"number of clouds is :"<<obj_cloud->points.size();
-    cout<<"center is: "<<px_py[0]<<" , "<<px_py[1]<<endl;
+    temp_cloud->height = 1;
+    temp_cloud->width = temp_cloud->points.size();
+    clouds.push_back(temp_cloud);
+    int32_t* temp_xy = new int32_t[2];
+    temp_xy[0] = int32_t(rects[rect_num].x+rects[rect_num].width/2);
+    temp_xy[1] = int32_t(rects[rect_num].y+rects[rect_num].height/2);
+    px_py.push_back(temp_xy);
+  }
 }
 
 void calculate_clouds_coordinate()
 {
 
     coordinate_vec.targets.clear();
-    common_msgs::targetState coordinate;
-    coordinate.tag=1;
-    coordinate.px = px_py[0];
-    coordinate.py = px_py[1];
-
-
-    ////利用PCA主元分析法获得点云的三个主方向，获取质心，计算协方差，获得协方差矩阵，求取协方差矩阵的特征值和特长向量，特征向量即为主方向。
-    Eigen::Vector4f pcaCentroid;
-    pcl::compute3DCentroid(*obj_cloud, pcaCentroid);
-    coordinate.x = pcaCentroid(0);
-    coordinate.y = pcaCentroid(1);
-    coordinate.z = pcaCentroid(2);
-    float coordinate_len = sqrt(coordinate.x*coordinate.x+coordinate.y*coordinate.y+coordinate.z*coordinate.z);
-    //if(coordinate_len<1e-5)
-    //    continue;
-//    ROS_INFO_STREAM("calculate xyz:"<<coordinate.x<<" "<<coordinate.y<<" "<<coordinate.z);
-
-//    ros::Time axis_begin = ros::Time::now();
-    Eigen::Matrix3f covariance;
-    pcl::computeCovarianceMatrixNormalized(*obj_cloud, pcaCentroid, covariance);
-//    ROS_INFO_STREAM("computeCovariance!");
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance, Eigen::ComputeEigenvectors);
-    Eigen::Matrix3f eigenVectorsPCA = eigen_solver.eigenvectors();
-//    ros::Time axis_end = ros::Time::now();
-//    ros::Duration axis_interval = axis_end-axis_begin;
-//    ROS_INFO_STREAM("computing size "<<cloud->points.size()<<" for "<<axis_interval.toSec()<<"s!!!");
-
-    eigenVectorsPCA.col(2) = eigenVectorsPCA.col(0).cross(eigenVectorsPCA.col(1)); //校正主方向间垂直
-    eigenVectorsPCA.col(0) = eigenVectorsPCA.col(1).cross(eigenVectorsPCA.col(2));
-    eigenVectorsPCA.col(1) = eigenVectorsPCA.col(2).cross(eigenVectorsPCA.col(0));
-    Eigen::Vector3f orient0 = eigenVectorsPCA.col(0);
-    Eigen::Vector3f orient1 = eigenVectorsPCA.col(1);
-    Eigen::Vector3f orient2 = eigenVectorsPCA.col(2);
-    float max_orient[3] = {0, 0, 0};
-    for(size_t i = 0;i<obj_cloud->points.size();i++)
+    for (int i=0;i<imagenum;i++)
     {
-      Eigen::Vector3f temp_vec;
-      temp_vec(0) = obj_cloud->points[i].x-coordinate.x;
-      temp_vec(1) = obj_cloud->points[i].y-coordinate.y;
-      temp_vec(2) = obj_cloud->points[i].z-coordinate.z;
-      float temp_orient0 = abs(temp_vec.dot(orient0));
-      float temp_orient1 = abs(temp_vec.dot(orient1));
-      float temp_orient2 = abs(temp_vec.dot(orient2));
-      max_orient[0] = temp_orient0>max_orient[0]?temp_orient0:max_orient[0];
-      max_orient[1] = temp_orient1>max_orient[1]?temp_orient1:max_orient[1];
-      max_orient[2] = temp_orient2>max_orient[2]?temp_orient2:max_orient[2];
-    }
 
-    std::vector<size_t> idx(3);
-    for(size_t i = 0;i!=idx.size();i++)idx[i] = i;
-     // 通过比较v的值对索引idx进行排序
-    std::sort(idx.begin(), idx.end(), [& max_orient](size_t i1, size_t i2) {return max_orient[i1] < max_orient[i2];});
-    Eigen::Matrix3f rotation;
-//    for(size_t i = 0;i<3;i++)
-    rotation.col(0) = eigenVectorsPCA.col(idx[2]);
-    rotation(0,2) = 0;
-    rotation(1,2) = 0;
-    rotation(2,2) = 1;
-    rotation.col(1) = rotation.col(2).cross(rotation.col(0));
-    float len = sqrt(rotation(0,1)*rotation(0,1)+rotation(1,1)*rotation(1,1)+rotation(2,1)*rotation(2,1));
-    rotation(0,1)/=len;
-    rotation(1,1)/=len;
-    rotation(2,1)/=len;
-    rotation.col(0) = rotation.col(1).cross(rotation.col(2));
-    Eigen::Quaternionf quaternion(rotation);
-    coordinate.qx = quaternion.x();
-    coordinate.qy = quaternion.y();
-    coordinate.qz = quaternion.z();
-    coordinate.qw = quaternion.w();
-    cout<<"center"<<endl;
-    cout<< coordinate.x<<endl;
-    cout<< coordinate.y<<endl;
-    cout<< coordinate.z<<endl;
-    //put the calculated coordinate into the vector
-    coordinate_vec.targets.push_back(coordinate);
+        PointCloud::Ptr cloud = clouds[i];
+        int* temp_xy = px_py[i];
 
+        common_msgs::targetState coordinate;
+        coordinate.tag=(int)i+1;
+        coordinate.px = temp_xy[0];
+        coordinate.py = temp_xy[1];
+
+
+        ////利用PCA主元分析法获得点云的三个主方向，获取质心，计算协方差，获得协方差矩阵，求取协方差矩阵的特征值和特长向量，特征向量即为主方向。
+        Eigen::Vector4f pcaCentroid;
+        pcl::compute3DCentroid(*cloud, pcaCentroid);
+        coordinate.x = pcaCentroid(0);
+        coordinate.y = pcaCentroid(1);
+        coordinate.z = pcaCentroid(2);
+        float coordinate_len = sqrt(coordinate.x*coordinate.x+coordinate.y*coordinate.y+coordinate.z*coordinate.z);
+        //if(coordinate_len<1e-5)
+        //    continue;
+    //    ROS_INFO_STREAM("calculate xyz:"<<coordinate.x<<" "<<coordinate.y<<" "<<coordinate.z);
+
+    //    ros::Time axis_begin = ros::Time::now();
+        Eigen::Matrix3f covariance;
+        pcl::computeCovarianceMatrixNormalized(*cloud, pcaCentroid, covariance);
+    //    ROS_INFO_STREAM("computeCovariance!");
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance, Eigen::ComputeEigenvectors);
+        Eigen::Matrix3f eigenVectorsPCA = eigen_solver.eigenvectors();
+    //    ros::Time axis_end = ros::Time::now();
+    //    ros::Duration axis_interval = axis_end-axis_begin;
+    //    ROS_INFO_STREAM("computing size "<<cloud->points.size()<<" for "<<axis_interval.toSec()<<"s!!!");
+
+        eigenVectorsPCA.col(2) = eigenVectorsPCA.col(0).cross(eigenVectorsPCA.col(1)); //校正主方向间垂直
+        eigenVectorsPCA.col(0) = eigenVectorsPCA.col(1).cross(eigenVectorsPCA.col(2));
+        eigenVectorsPCA.col(1) = eigenVectorsPCA.col(2).cross(eigenVectorsPCA.col(0));
+        Eigen::Vector3f orient0 = eigenVectorsPCA.col(0);
+        Eigen::Vector3f orient1 = eigenVectorsPCA.col(1);
+        Eigen::Vector3f orient2 = eigenVectorsPCA.col(2);
+        float max_orient[3] = {0, 0, 0};
+        for(size_t i = 0;i<cloud->points.size();i++)
+        {
+          Eigen::Vector3f temp_vec;
+          temp_vec(0) = cloud->points[i].x-coordinate.x;
+          temp_vec(1) = cloud->points[i].y-coordinate.y;
+          temp_vec(2) = cloud->points[i].z-coordinate.z;
+          float temp_orient0 = abs(temp_vec.dot(orient0));
+          float temp_orient1 = abs(temp_vec.dot(orient1));
+          float temp_orient2 = abs(temp_vec.dot(orient2));
+          max_orient[0] = temp_orient0>max_orient[0]?temp_orient0:max_orient[0];
+          max_orient[1] = temp_orient1>max_orient[1]?temp_orient1:max_orient[1];
+          max_orient[2] = temp_orient2>max_orient[2]?temp_orient2:max_orient[2];
+        }
+
+        std::vector<size_t> idx(3);
+        for(size_t i = 0;i!=idx.size();i++)idx[i] = i;
+         // 通过比较v的值对索引idx进行排序
+        std::sort(idx.begin(), idx.end(), [& max_orient](size_t i1, size_t i2) {return max_orient[i1] < max_orient[i2];});
+        Eigen::Matrix3f rotation;
+    //    for(size_t i = 0;i<3;i++)
+        rotation.col(0) = eigenVectorsPCA.col(idx[2]);
+        rotation(0,2) = 0;
+        rotation(1,2) = 0;
+        rotation(2,2) = 1;
+        rotation.col(1) = rotation.col(2).cross(rotation.col(0));
+        float len = sqrt(rotation(0,1)*rotation(0,1)+rotation(1,1)*rotation(1,1)+rotation(2,1)*rotation(2,1));
+        rotation(0,1)/=len;
+        rotation(1,1)/=len;
+        rotation(2,1)/=len;
+        rotation.col(0) = rotation.col(1).cross(rotation.col(2));
+        Eigen::Quaternionf quaternion(rotation);
+        coordinate.qx = quaternion.x();
+        coordinate.qy = quaternion.y();
+        coordinate.qz = quaternion.z();
+        coordinate.qw = quaternion.w();
+        cout<<"center"<<endl;
+        cout<<coordinate.tag<<endl;
+        cout<<coordinate.px<<endl;
+        cout<<coordinate.py<<endl;
+        cout<< coordinate.x<<endl;
+        cout<< coordinate.y<<endl;
+        cout<< coordinate.z<<endl;
+        rects.clear();
+        //put the calculated coordinate into the vector
+        coordinate_vec.targets.push_back(coordinate);
+   }
 }
 
 void imageCallback_depth( const sensor_msgs::ImageConstPtr  &image_depth )
@@ -378,11 +373,20 @@ void imageCallback_color( const sensor_msgs::ImageConstPtr &image_rgb)
       //转换ROS图像消息到opencv图像
         mat_image_rgb = cv_bridge::toCvShare(image_rgb,"bgr8")->image;
 
-        cv::Rect rect;
-        surf_detect(mat_image_rgb,rect);
-        cout<<"surf detection has done!"<<endl;
+        vector<cv::Mat> srcImage;
+        Mat srcImage1 = imread("/home/zhsyi/kinova/src/Camera/camera2/src/image/1.png");
+        Mat srcImage2 = imread("/home/zhsyi/kinova/src/Camera/camera2/src/image/2.png");
+        srcImage.push_back(srcImage2);
+        srcImage.push_back(srcImage1);
+        imagenum=srcImage.size();
+        for (int i =0;i<srcImage.size();i++)
+        {
+            cv::Rect rect;
+            surf_detect(mat_image_rgb,rect,srcImage[i]);
+            cout<<"surf detection has done!"<<endl;
+        }
 
-        GetCloud(rect,mat_image_rgb,mat_image_depth);
+        GetCloud(rects,mat_image_rgb,mat_image_depth);
         cout<<"3D cloud information has got!"<<endl;
 
         calculate_clouds_coordinate();
